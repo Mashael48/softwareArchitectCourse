@@ -1,48 +1,16 @@
 @startuml context
- 
 !include <C4/C4_Context>
- 
 title Hajj Permit (Vehicles) - System Context (C4 Level 1)
- 
-' Put a small legend at the bottom explaining the colours
-
 LAYOUT_WITH_LEGEND()
- 
-' A Person is a human being who uses the system
-
-' The three parts are: short id, name on the box, description under the name
-
-Person(moroor, "Moroor", "Moroor user to manage the inventory, and accept entites inventorey requests")
-
-Person(entities, "entities", "Entites users who request inventory and issues permits")
- 
-' A System is a thing we own and change
-
-System(hajj_permit_core, "Hajj Permit Core", "The 2022 system, regitration, inventory mngmnt, permit mngmnt")
- 
-' A System_Ext is a system somebody else owns, We cannot change
-
+Person(moroor, "Moroor", "Moroor users who process inventory requests")
+Person(entities, "Entities", "Entity users who request inventory and issue permits")
+System(hajj_permit_core, "Hajj Permit Core", "The 2022 system for inventory management, entity management, and permit management")
 System_Ext(notification, "Notification", "Sends SMS notifications")
-
-System_Ext(tawakkalna, "Tawakkalna", "Digital permit display and wallet sync")
-
-System_Ext(nic, "NIC", "Vehicle permit valiation and verification")
- 
-' Rel means relationship. It draws an arrow from the first id to the second id
-
-' The text is what the arrow does, written from the caller's point of view
- 
-Rel(moroor, hajj_permit_core, "Manage the inventory, and accept entites inventorey request")
-
-Rel(entities, hajj_permit_core, "Request and view inventory and issues permits")
-
-Rel(hajj_permit_core, notification, "Send sms message to entites", "HTTPS")
-
-Rel(hajj_permit_core, tawakkalna, "Asks to charge the card", "HTTPS")
-
-Rel(hajj_permit_core, nic, "Valiation vehyicle permit", "HTTPS")
- 
-'Every diagram must be closed with @enduml
-
+System_Ext(tawakkalna, "Tawakkalna", "Displays digital permits and synchronizes them with the digital wallet")
+System_Ext(nic, "NIC", "Validates and verifies vehicle permits")
+Rel(moroor, hajj_permit_core, "Processes inventory requests")
+Rel(entities, hajj_permit_core, "Requests and views inventory, and issues permits")
+Rel(hajj_permit_core, notification, "Sends SMS notifications to entities", "HTTPS")
+Rel(hajj_permit_core, tawakkalna, "Sends permit information for digital wallet synchronization", "HTTPS")
+Rel(hajj_permit_core, nic, "Validates vehicle permits", "HTTPS")
 @enduml
- 
