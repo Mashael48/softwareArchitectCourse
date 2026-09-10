@@ -1,0 +1,47 @@
+services:
+  gateway:
+    build: ./services/gateway
+    ports:
+      - "3000:3000"
+    environment:
+      ENTITY_URL: http://entity-service:3001
+      INVENTORY_URL: http://inventory-service:3002
+      PERMIT_URL: http://permit-service:3003
+    depends_on:
+      - entity-service
+      - inventory-service
+      - permit-service
+
+  entity-service:
+    build: ./services/entity-service
+    ports:
+      - "3001:3001"
+
+  inventory-service:
+    build: ./services/inventory-service
+    ports:
+      - "3002:3002"
+    environment:
+      ENTITY_URL: http://entity-service:3001
+      NOTIFICATION_URL: http://notification-service:3004
+    depends_on:
+      - entity-service
+      - notification-service
+
+  permit-service:
+    build: ./services/permit-service
+    ports:
+      - "3003:3003"
+    environment:
+      ENTITY_URL: http://entity-service:3001
+      INVENTORY_URL: http://inventory-service:3002
+      NOTIFICATION_URL: http://notification-service:3004
+    depends_on:
+      - entity-service
+      - inventory-service
+      - notification-service
+
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "3004:3004"

@@ -8,15 +8,15 @@ We have three main contexts:
 
 ## Context 1: Entity
 
-Purpose: manage entities and their eligibility.
+Purpose: manage entities.
 
-| Word | Meaning |
-|---|---|
+| Word   | Meaning                                      |
+|--------|----------------------------------------------|
 | entity | An organization using the Hajj Permit system |
-| status | Whether the entity is active and eligible |
+| status | Whether the entity is active                 |
 
 Promises:
-- Provides entity information and eligibility.
+- Provides entity information.
 - Other contexts reference entities by ID.
 - Entity data is managed only inside the Entity context.
 
@@ -26,12 +26,12 @@ Promises:
 
 Purpose: manage permit inventory and inventory requests.
 
-| Word | Meaning |
-|---|---|
-| inventory | Number of permits available to an entity |
-| request | A request for additional inventory |
-| allocation | Inventory approved for an entity |
-| entity | The entity that owns or requests the inventory |
+| Word       | Meaning                                        |
+|------------|------------------------------------------------|
+| inventory  | Number of permits available to an entity       |
+| request    | A request for additional inventory             |
+| allocation | Inventory approved for an entity               |
+| entity     | The entity that owns or requests the inventory |
 
 Promises:
 - Tracks available inventory.
@@ -45,12 +45,12 @@ Promises:
 
 Purpose: issue and manage vehicle permits.
 
-| Word | Meaning |
-|---|---|
-| permit | Authorization issued for a vehicle |
-| vehicle | Vehicle validated through NIC |
+| Word      | Meaning                                       |
+|-----------|-----------------------------------------------|
+| permit    | Authorization issued for a vehicle            |
+| vehicle   | Vehicle validated through NIC                 |
 | inventory | One available unit required to issue a permit |
-| entity | The entity issuing the permit |
+| entity    | The entity issuing the permit                 |
 
 Promises:
 - Validates vehicles through NIC.
