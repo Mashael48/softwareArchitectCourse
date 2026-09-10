@@ -24,9 +24,11 @@ services:
     environment:
       ENTITY_URL: http://entity-service:3001
       NOTIFICATION_URL: http://notification-service:3004
+      REDIS_URL: redis://redis:6379
     depends_on:
       - entity-service
       - notification-service
+      - redis
 
   permit-service:
     build: ./services/permit-service
@@ -45,3 +47,8 @@ services:
     build: ./services/notification-service
     ports:
       - "3004:3004"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
