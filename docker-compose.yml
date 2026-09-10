@@ -2,11 +2,7 @@ services:
   gateway:
     build: ./services/gateway
     ports:
-      - "3000:3000"
-    environment:
-      ENTITY_URL: http://entity-service:3001
-      INVENTORY_URL: http://inventory-service:3002
-      PERMIT_URL: http://permit-service:3003
+      - "3000:80"
     depends_on:
       - entity-service
       - inventory-service
@@ -52,3 +48,15 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./load:/scripts:ro
+    environment:
+      BASE_URL: http://gateway
+    depends_on:
+      - gateway
+    profiles:
+      - manual
+    command: run /scripts/hajj-permit-load.js
