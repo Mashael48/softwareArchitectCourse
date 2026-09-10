@@ -8,7 +8,7 @@ System_Ext(notification, "Notification", "Sends SMS notifications")
 System_Ext(tawakkalna, "Tawakkalna", "Displays digital permits and synchronizes them with the digital wallet")
 System_Ext(nic, "NIC", "Validates and verifies vehicle permits")
 System_Boundary(hajj_permit_core, "Hajj Permit Core") {
-Container(gateway, "Backend Gateway", "Node.js / Express", "Provides a single entry point for backend APIs and routes requests to the appropriate service")
+Container(gateway, "Backend Gateway", "Nginx", "Provides a single entry point for backend APIs and routes requests to the appropriate service")
 Container(entity_service, "Entity Service", "Node.js / Express", "Handles entity management")
 Container(inventory_service, "Inventory Service", "Node.js / Express", "Handles inventory requests, allocation management, and processing locks")
 Container(permit_service, "Permit Service", "Node.js / Express", "Handles permit issuance, viewing, and permit-related operations")
