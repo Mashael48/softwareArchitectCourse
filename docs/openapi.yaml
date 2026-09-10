@@ -1,45 +1,31 @@
-# OpenAPI version used by this API contract.
 openapi: 3.0.3
 
-# General information about the API.
 info:
   title: Hajj Permit API
-  version: 1.0.0
+  version: 1.1.0
   description: >
-    Backend API for the Hajj Permit course project.
-    It provides entity management, inventory requests,
-    inventory management, and vehicle permit issuance.
+    Backend API for the Hajj Permit course project. Clients access the
+    microservices through the Backend Gateway. Inventory request processing
+    uses Redis to prevent concurrent processing of the same request.
 
-# Clients access the system through the Backend Gateway.
 servers:
   - url: http://localhost:3000
     description: Local Docker environment through Backend Gateway
 
-# Groups used to organize the API documentation.
 tags:
   - name: Health
-    description: Service health check
-
+    description: Gateway health check
   - name: Entity
-    description: Entity information
-
+    description: Entity management
   - name: Inventory
-    description: Permit inventory and inventory requests
-
+    description: Permit inventory, inventory requests, and request processing locks
   - name: Permit
     description: Vehicle permit issuance and management
 
-
 paths:
-
-  # ---------------------------------------------------------
-  # Health
-  # ---------------------------------------------------------
-
   /health:
     get:
-      tags:
-        - Health
+      tags: [Health]
       operationId: getHealth
       summary: Check whether the gateway is running
       responses:
@@ -49,9 +35,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - service
-                  - status
+                required: [service, status]
                 properties:
                   service:
                     type: string
@@ -60,15 +44,9 @@ paths:
                     type: string
                     example: UP
 
-
-  # ---------------------------------------------------------
-  # Entity
-  # ---------------------------------------------------------
-
   /entities:
     get:
-      tags:
-        - Entity
+      tags: [Entity]
       operationId: getEntities
       summary: Get all entities
       responses:
@@ -82,8 +60,7 @@ paths:
                   $ref: "#/components/schemas/Entity"
 
     post:
-      tags:
-        - Entity
+      tags: [Entity]
       operationId: createEntity
       summary: Create a new entity
       requestBody:
@@ -92,9 +69,7 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - id
-                - name
+              required: [id, name]
               properties:
                 id:
                   type: string
@@ -106,7 +81,6 @@ paths:
                   type: boolean
                   default: true
                   example: true
-
       responses:
         "201":
           description: Entity created successfully
@@ -114,44 +88,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Entity"
-
         "400":
           description: Required information is missing
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
               example:
                 message: id and name are required
-
         "409":
           description: Entity already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
               example:
                 message: Entity already exists
 
-
   /entities/{id}:
     get:
-      tags:
-        - Entity
+      tags: [Entity]
       operationId: getEntityById
       summary: Get one entity by ID
-
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: Entity ID
-          schema:
-            type: string
-          example: E1
-
+        - $ref: "#/components/parameters/EntityId"
       responses:
         "200":
           description: Entity was found
@@ -159,29 +119,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Entity"
-
         "404":
           description: Entity was not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
               example:
                 message: Entity not found
 
-
-  # ---------------------------------------------------------
-  # Inventory
-  # ---------------------------------------------------------
-
   /inventory/requests:
     get:
-      tags:
-        - Inventory
+      tags: [Inventory]
       operationId: getInventoryRequests
       summary: Get all inventory requests
-
       responses:
         "200":
           description: List of inventory requests
@@ -192,34 +143,16 @@ paths:
                 items:
                   $ref: "#/components/schemas/InventoryRequest"
 
-
     post:
-      tags:
-        - Inventory
+      tags: [Inventory]
       operationId: createInventoryRequest
       summary: Request additional permit inventory
-
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - entityId
-                - amount
-              properties:
-                entityId:
-                  type: string
-                  description: Entity requesting additional inventory
-                  example: E1
-
-                amount:
-                  type: integer
-                  minimum: 1
-                  description: Number of permit units requested
-                  example: 5
-
+              $ref: "#/components/schemas/CreateInventoryRequest"
       responses:
         "201":
           description: Inventory request created
@@ -227,38 +160,124 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryRequest"
-
         "400":
-          description: Invalid request or entity is not eligible
+          description: Invalid request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+              example:
+                message: entityId and positive integer amount are required
 
+  /inventory/requests/{id}/process:
+    post:
+      tags: [Inventory]
+      operationId: startInventoryRequestProcessing
+      summary: Start processing an inventory request
+      description: >
+        Creates a temporary Redis processing lock. Redis SET NX ensures that
+        only one processor can acquire the request at a time. The lock expires
+        automatically after 120 seconds.
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessorRequest"
+      responses:
+        "200":
+          description: Processing lock acquired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingLock"
+        "400":
+          description: Request has already been processed or processorId is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          description: Entity was not found
+          description: Inventory request was not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: Another processor already holds the Redis lock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingConflict"
 
+    delete:
+      tags: [Inventory]
+      operationId: releaseInventoryRequestProcessing
+      summary: Release an inventory request processing lock
+      description: >
+        Releases the temporary Redis processing lock without approving the request.
+        Only the processor that owns the lock can release it.
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessorRequest"
+      responses:
+        "200":
+          description: Processing lock released
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requestId, status]
+                properties:
+                  requestId:
+                    type: string
+                    example: R1
+                  status:
+                    type: string
+                    enum: [RELEASED]
+                    example: RELEASED
+        "400":
+          description: processorId is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Request was not found or is not under processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The processing lock belongs to another processor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingConflict"
 
   /inventory/requests/{id}/approve:
     post:
-      tags:
-        - Inventory
+      tags: [Inventory]
       operationId: approveInventoryRequest
       summary: Approve an inventory request
-
+      description: >
+        Approves a pending inventory request. The caller must own the Redis
+        processing lock. After approval, inventory is increased and the lock is removed.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: Inventory request ID
-          schema:
-            type: string
-          example: R1
-
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessorRequest"
       responses:
         "200":
           description: Inventory request approved and inventory increased
@@ -266,49 +285,44 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - request
-                  - available
+                required: [request, available]
                 properties:
                   request:
                     $ref: "#/components/schemas/InventoryRequest"
-
                   available:
                     type: integer
-                    description: Updated available inventory
                     example: 8
-
         "400":
-          description: Inventory request has already been processed
+          description: Request already processed or processorId is missing
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
         "404":
           description: Inventory request was not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
+        "409":
+          description: Request is not locked or belongs to another processor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /inventory/{entityId}:
     get:
-      tags:
-        - Inventory
+      tags: [Inventory]
       operationId: getInventoryByEntity
       summary: Get available inventory for an entity
-
       parameters:
         - name: entityId
           in: path
           required: true
-          description: Entity ID
           schema:
             type: string
           example: E1
-
       responses:
         "200":
           description: Current inventory for the entity
@@ -317,38 +331,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/Inventory"
 
-
   /inventory/consume:
     post:
-      tags:
-        - Inventory
+      tags: [Inventory]
       operationId: consumeInventory
       summary: Consume permit inventory
-
       description: >
-        Consumes inventory owned by the Inventory Service.
-        This operation is mainly used internally by the Permit Service
-        when issuing a permit.
-
+        Internal inventory operation mainly called by Permit Service when a permit is issued.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - entityId
+              required: [entityId]
               properties:
                 entityId:
                   type: string
                   example: E1
-
                 amount:
                   type: integer
                   minimum: 1
                   default: 1
                   example: 1
-
       responses:
         "200":
           description: Inventory was consumed
@@ -356,58 +361,40 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - entityId
-                  - consumed
-                  - remaining
+                required: [entityId, consumed, remaining]
                 properties:
                   entityId:
                     type: string
                     example: E1
-
                   consumed:
                     type: integer
                     example: 1
-
                   remaining:
                     type: integer
-                    example: 2
-
+                    example: 7
         "409":
-          description: Entity does not have enough inventory
+          description: Not enough inventory
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - message
-                  - entityId
-                  - available
+                required: [message, entityId, available]
                 properties:
                   message:
                     type: string
                     example: Not enough inventory
-
                   entityId:
                     type: string
                     example: E1
-
                   available:
                     type: integer
                     example: 0
 
-
-  # ---------------------------------------------------------
-  # Permit
-  # ---------------------------------------------------------
-
   /permits:
     get:
-      tags:
-        - Permit
+      tags: [Permit]
       operationId: getPermits
       summary: Get all issued permits
-
       responses:
         "200":
           description: List of issued permits
@@ -418,37 +405,28 @@ paths:
                 items:
                   $ref: "#/components/schemas/Permit"
 
-
     post:
-      tags:
-        - Permit
+      tags: [Permit]
       operationId: issuePermit
       summary: Issue a vehicle permit
-
       description: >
-        Validates the vehicle through the
-        mocked NIC integration, consumes one inventory unit,
-        creates the permit, synchronizes it with the mocked
-        Tawakkalna integration, and requests an SMS notification.
-
+        Validates the vehicle through the mocked NIC integration, consumes one
+        inventory unit through Inventory Service, creates the permit, synchronizes
+        it with the mocked Tawakkalna integration, and requests an SMS notification.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - entityId
-                - vehiclePlate
+              required: [entityId, vehiclePlate]
               properties:
                 entityId:
                   type: string
                   example: E1
-
                 vehiclePlate:
                   type: string
                   example: ABC-1234
-
       responses:
         "201":
           description: Permit issued successfully
@@ -456,87 +434,62 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - permit
-                  - nic
-                  - inventory
-                  - tawakkalna
+                required: [permit, nic, inventory, tawakkalna]
                 properties:
-
                   permit:
                     $ref: "#/components/schemas/Permit"
-
                   nic:
                     type: object
                     properties:
                       valid:
                         type: boolean
                         example: true
-
                       vehiclePlate:
                         type: string
                         example: ABC-1234
-
                   inventory:
                     type: object
                     properties:
                       entityId:
                         type: string
                         example: E1
-
                       consumed:
                         type: integer
                         example: 1
-
                       remaining:
                         type: integer
-                        example: 2
-
+                        example: 7
                   tawakkalna:
                     type: object
                     properties:
                       synchronized:
                         type: boolean
                         example: true
-
         "400":
-          description: Invalid request, ineligible entity, or invalid vehicle
+          description: Required permit information is missing or vehicle validation failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
-        "404":
-          description: Entity was not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
         "409":
-          description: Not enough inventory to issue the permit
+          description: Inventory could not be consumed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
 
   /permits/{id}:
     get:
-      tags:
-        - Permit
+      tags: [Permit]
       operationId: getPermitById
       summary: Get one permit by ID
-
       parameters:
         - name: id
           in: path
           required: true
-          description: Permit ID
           schema:
             type: string
           example: P1
-
       responses:
         "200":
           description: Permit was found
@@ -544,7 +497,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Permit"
-
         "404":
           description: Permit was not found
           content:
@@ -552,108 +504,146 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-
-# Reusable data structures.
 components:
+  parameters:
+    EntityId:
+      name: id
+      in: path
+      required: true
+      description: Entity ID
+      schema:
+        type: string
+      example: E1
+
+    RequestId:
+      name: id
+      in: path
+      required: true
+      description: Inventory request ID
+      schema:
+        type: string
+      example: R1
 
   schemas:
-
     Entity:
       type: object
-      required:
-        - id
-        - name
-        - active
+      required: [id, name, active]
       properties:
         id:
           type: string
           example: E1
-
         name:
           type: string
           example: Alpha Transport
-
         active:
           type: boolean
-          description: Whether the entity is active and eligible
           example: true
-
 
     Inventory:
       type: object
-      required:
-        - entityId
-        - available
+      required: [entityId, available]
       properties:
         entityId:
           type: string
           example: E1
-
         available:
           type: integer
           example: 3
 
+    CreateInventoryRequest:
+      type: object
+      required: [entityId, amount]
+      properties:
+        entityId:
+          type: string
+          example: E1
+        amount:
+          type: integer
+          minimum: 1
+          example: 5
 
     InventoryRequest:
       type: object
-      required:
-        - id
-        - entityId
-        - amount
-        - status
+      required: [id, entityId, amount, status]
       properties:
         id:
           type: string
           example: R1
-
         entityId:
           type: string
           example: E1
-
         amount:
           type: integer
           example: 5
-
         status:
           type: string
-          enum:
-            - PENDING
-            - APPROVED
+          enum: [PENDING, APPROVED]
           example: PENDING
 
+    ProcessorRequest:
+      type: object
+      required: [processorId]
+      properties:
+        processorId:
+          type: string
+          description: Moroor user currently processing the request
+          example: moroor-1
+
+    ProcessingLock:
+      type: object
+      required: [requestId, status, processorId, expiresInSeconds]
+      properties:
+        requestId:
+          type: string
+          example: R1
+        status:
+          type: string
+          enum: [PROCESSING]
+          example: PROCESSING
+        processorId:
+          type: string
+          example: moroor-1
+        expiresInSeconds:
+          type: integer
+          example: 120
+
+    ProcessingConflict:
+      type: object
+      required: [message, requestId, processorId]
+      properties:
+        message:
+          type: string
+          example: Request is already under processing
+        requestId:
+          type: string
+          example: R1
+        processorId:
+          type: string
+          description: Processor currently holding the Redis lock
+          example: moroor-1
 
     Permit:
       type: object
-      required:
-        - id
-        - entityId
-        - vehiclePlate
-        - status
+      required: [id, entityId, vehiclePlate, status]
       properties:
         id:
           type: string
           example: P1
-
         entityId:
           type: string
           example: E1
-
         vehiclePlate:
           type: string
           example: ABC-1234
-
         status:
           type: string
-          enum:
-            - ISSUED
+          enum: [ISSUED]
           example: ISSUED
-
 
     Error:
       type: object
-      required:
-        - message
+      required: [message]
       properties:
         message:
           type: string
-          example: Entity not found
+          example: Request not found
